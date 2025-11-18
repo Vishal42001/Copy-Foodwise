@@ -7,7 +7,6 @@ import UserProfileForm from './components/UserProfileForm';
 import ChatInterface from './components/ChatInterface';
 import FeatureSelection from './components/FeatureSelection';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MenuIcon } from './components/icons/Icons';
 
 const App: React.FC = () => {
   const [userProfile, setUserProfile] = useLocalStorage<UserProfile | null>('foodwise-userProfile', null);
@@ -16,7 +15,6 @@ const App: React.FC = () => {
   const [isProfileModalOpen, setProfileModalOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   
   // Effect to set an active chat on initial load if one exists
   useEffect(() => {
@@ -37,34 +35,19 @@ const App: React.FC = () => {
     };
     setChatSessions(prev => [newChat, ...prev]);
     setActiveChatId(newChat.id);
-    setIsSidebarOpen(false); // Close sidebar on mobile after action
   };
   
   const handleSelectChat = (chatId: string) => {
     setActiveChatId(chatId);
-    setIsSidebarOpen(false); // Close sidebar on mobile after action
   };
   
   const handleDeleteChat = (chatId: string) => {
-    const indexToDelete = chatSessions.findIndex(session => session.id === chatId);
-    if (indexToDelete === -1) return;
-
-    // Determine the next active chat ID *before* updating state
-    let newActiveId = activeChatId;
-    if (activeChatId === chatId) {
-      const remainingSessions = chatSessions.filter(s => s.id !== chatId);
-      if (remainingSessions.length === 0) {
-        newActiveId = null; // No chats left
-      } else {
-        // Select the next chat, or the previous one if deleting the last in the list
-        const nextIndex = Math.min(indexToDelete, remainingSessions.length - 1);
-        newActiveId = remainingSessions[nextIndex].id;
-      }
-    }
-    
-    // Now update both states. React will batch these.
     setChatSessions(prev => prev.filter(session => session.id !== chatId));
-    setActiveChatId(newActiveId);
+    if (activeChatId === chatId) {
+        // If the active chat is deleted, switch to the next one or clear the view
+        const remainingChats = chatSessions.filter(session => session.id !== chatId);
+        setActiveChatId(remainingChats.length > 0 ? remainingChats[0].id : null);
+    }
   };
 
   const updateChatSession = (chatId: string, updates: Partial<ChatSession>) => {
@@ -77,15 +60,21 @@ const App: React.FC = () => {
 
   const handleFeatureSelect = (feature: Feature) => {
     if (!activeChatId) {
-        // This should not happen in the normal user flow.
-        // If it does, it indicates a state problem. We'll log an error and do nothing.
-        console.error("handleFeatureSelect called without an active chat ID.");
-        return;
+        // This case should ideally not happen if a new chat is created first, but as a fallback:
+        handleNewChat();
+        // We need to wait for the state update, so we'll handle this in an effect or a more robust state machine.
+        // For simplicity, we'll update the session that was just created.
+        const newChatId = chatSessions[0]?.id || `chat_${Date.now()}`;
+        updateChatSession(newChatId, { 
+            feature,
+            messages: [{ id: Date.now(), role: 'model', text: feature.welcomeMessage }]
+        });
+    } else {
+        updateChatSession(activeChatId, {
+            feature,
+            messages: [{ id: Date.now(), role: 'model', text: feature.welcomeMessage }]
+        });
     }
-    updateChatSession(activeChatId, {
-        feature,
-        messages: [{ id: Date.now(), role: 'model', text: feature.welcomeMessage }]
-    });
     setError(null);
   };
   
@@ -165,7 +154,7 @@ const App: React.FC = () => {
   const showFeatureSelection = !activeChat || !activeChat.feature;
 
   return (
-    <div className="flex h-screen bg-slate-900 text-slate-200 overflow-hidden">
+    <div className="flex h-screen bg-slate-900 text-slate-200">
       <Sidebar 
         chatSessions={chatSessions}
         activeChatId={activeChatId}
@@ -173,20 +162,8 @@ const App: React.FC = () => {
         onSelectChat={handleSelectChat}
         onDeleteChat={handleDeleteChat}
         onProfileClick={() => setProfileModalOpen(true)} 
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
       />
       <main className="flex-1 flex flex-col h-full overflow-y-hidden">
-        {/* Mobile Header */}
-        <header className="md:hidden flex items-center justify-between p-2 border-b border-slate-700 bg-slate-900/80 backdrop-blur-sm">
-            <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-300">
-                <MenuIcon />
-            </button>
-            <h1 className="text-md font-semibold truncate px-2">{activeChat?.title || 'Foodwise AI'}</h1>
-            {/* Placeholder for potential right-side icon */}
-            <div className="w-9 h-9"></div> 
-        </header>
-
         <div className="flex-1 overflow-y-auto">
           <AnimatePresence mode="wait">
             {showFeatureSelection ? (
