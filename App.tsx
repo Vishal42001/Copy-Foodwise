@@ -46,12 +46,25 @@ const App: React.FC = () => {
   };
   
   const handleDeleteChat = (chatId: string) => {
-    setChatSessions(prev => prev.filter(session => session.id !== chatId));
+    const indexToDelete = chatSessions.findIndex(session => session.id === chatId);
+    if (indexToDelete === -1) return;
+
+    // Determine the next active chat ID *before* updating state
+    let newActiveId = activeChatId;
     if (activeChatId === chatId) {
-        // If the active chat is deleted, switch to the next one or clear the view
-        const remainingChats = chatSessions.filter(session => session.id !== chatId);
-        setActiveChatId(remainingChats.length > 0 ? remainingChats[0].id : null);
+      const remainingSessions = chatSessions.filter(s => s.id !== chatId);
+      if (remainingSessions.length === 0) {
+        newActiveId = null; // No chats left
+      } else {
+        // Select the next chat, or the previous one if deleting the last in the list
+        const nextIndex = Math.min(indexToDelete, remainingSessions.length - 1);
+        newActiveId = remainingSessions[nextIndex].id;
+      }
     }
+    
+    // Now update both states. React will batch these.
+    setChatSessions(prev => prev.filter(session => session.id !== chatId));
+    setActiveChatId(newActiveId);
   };
 
   const updateChatSession = (chatId: string, updates: Partial<ChatSession>) => {
@@ -64,21 +77,15 @@ const App: React.FC = () => {
 
   const handleFeatureSelect = (feature: Feature) => {
     if (!activeChatId) {
-        // This case should ideally not happen if a new chat is created first, but as a fallback:
-        handleNewChat();
-        // We need to wait for the state update, so we'll handle this in an effect or a more robust state machine.
-        // For simplicity, we'll update the session that was just created.
-        const newChatId = chatSessions[0]?.id || `chat_${Date.now()}`;
-        updateChatSession(newChatId, { 
-            feature,
-            messages: [{ id: Date.now(), role: 'model', text: feature.welcomeMessage }]
-        });
-    } else {
-        updateChatSession(activeChatId, {
-            feature,
-            messages: [{ id: Date.now(), role: 'model', text: feature.welcomeMessage }]
-        });
+        // This should not happen in the normal user flow.
+        // If it does, it indicates a state problem. We'll log an error and do nothing.
+        console.error("handleFeatureSelect called without an active chat ID.");
+        return;
     }
+    updateChatSession(activeChatId, {
+        feature,
+        messages: [{ id: Date.now(), role: 'model', text: feature.welcomeMessage }]
+    });
     setError(null);
   };
   
