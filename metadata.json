@@ -1,0 +1,7 @@
+{
+  "name": "Copy of Foodwise AI",
+  "description": "An AI-powered nutrition advisor that provides personalized meal plans, recipe analysis, and answers to your nutritional questions based on evidence-backed information. Upload images of food labels for quick analysis.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
